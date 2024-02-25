@@ -1,6 +1,6 @@
 use reqwest::blocking;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, error::Error, io::Read};
+use std::{error::Error};
 
 pub struct HttpClient {
     request_host: RequestHost,
@@ -13,7 +13,14 @@ pub struct RequestHost {
 }
 
 impl RequestHost {
-    fn get_base_url(&self) -> String {
+    pub fn new(
+        protocol : String,
+        host: String,
+        port: i128
+    ) -> RequestHost {
+        RequestHost { protocol, host, port }
+    }
+    pub fn get_base_url(&self) -> String {
         return format!("{}://{}:{}", &self.protocol, &self.host, &self.port);
     }
 }
@@ -33,7 +40,11 @@ pub struct RequestHttp {
 
 
 impl HttpClient {
-    fn get<T>(&self, path: &str, path_param: Option<Vec<(String, String)>>) -> Option<T>
+    pub fn new(request_host:RequestHost) -> HttpClient {
+        HttpClient { request_host }
+    }
+
+    pub fn get<T>(&self, headers: &[(String, String)],path: &str, path_param: Option<Vec<(String, String)>>) -> Option<T>
     where
         T: Serialize + for<'a> Deserialize<'a>,
     {
@@ -55,7 +66,7 @@ impl HttpClient {
     }
 
 
-    fn post<T, R>(&self, path: &str, path_param: Option<Vec<(String, String)>>,body: T) -> Option<R>
+    pub fn post<T, R>(&self, headers:&[(String, String)], path: &str, path_param: Option<Vec<(String, String)>>,body: T) -> Option<R>
     where
         T: Serialize,
         R: for<'a> Deserialize<'a>,
@@ -66,12 +77,17 @@ impl HttpClient {
             None => path.to_string(),
         };
 
-        let result = RequestHttp::new(HttpMethod::GET,
+        let result = RequestHttp::new(HttpMethod::POST,
             &self.request_host, 
             Some(&str_path),
             Some(&serde_json::to_string(&body).ok()?)
         );
-        return Some(serde_json::from_str(&result.post_with_http().unwrap()).expect("Parsing Exception"));
+
+        let str_result = result.post_with_http().unwrap();
+
+        Some(
+            serde_json::from_str::<R>(&str_result).expect("Post Result To R")
+        )
     }
 }
 
@@ -100,6 +116,7 @@ impl RequestHttp {
     pub fn post_with_http(&self) -> Result<String, Box<dyn Error>> {
         let client = blocking::Client::new();
         let rsp = client.post(&self.uri)
+        .header("content-type", "application/json")
         .body(match &self.body {
             Some(item) => {
                 item.clone()
@@ -150,7 +167,7 @@ mod test_http {
             },
         };
 
-        let result: Option<JsonPlaceHolderData> = client.get("/todos/1", None);
+        let result: Option<JsonPlaceHolderData> = client.get(&[],"/todos/1", None);
         println!("{:?}", result);
     }
 
