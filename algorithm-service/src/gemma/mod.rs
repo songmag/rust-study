@@ -1,11 +1,8 @@
 pub mod response;
 
-use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-
 use crate::http_util;
-
 pub use self::response::*;
 
 #[derive(Debug, Deserialize)]
@@ -79,8 +76,7 @@ impl GemmaAPI {
                         }],
                     }],
                 },
-            )
-            .expect("can not read")
+            )?
         )
     }
 }

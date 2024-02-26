@@ -84,7 +84,7 @@ impl HttpClient {
         );
 
         let str_result = result.post_with_http().unwrap();
-
+        
         Some(
             serde_json::from_str::<R>(&str_result).expect("Post Result To R")
         )
