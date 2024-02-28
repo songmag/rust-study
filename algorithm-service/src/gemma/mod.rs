@@ -1,9 +1,16 @@
 pub mod response;
-
+mod test_tool;
+mod chat_tool;
 
 use serde::{Deserialize, Serialize};
 use crate::http_util;
 pub use self::response::*;
+pub use self::chat_tool::*;
+pub use self::test_tool::*;
+pub trait GeminiAPIService {
+    fn add_prompt(&mut self,text: String);
+    fn send(&self,text: &String) -> Option<GemmaResponse>;
+}
 
 #[derive(Debug, Deserialize)]
 pub enum Part {

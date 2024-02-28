@@ -18,4 +18,3 @@ pub struct Candidate {
 pub struct GemmaResponse {
     pub candidates: Vec<Candidate>
 }
-
