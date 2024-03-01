@@ -28,6 +28,9 @@ impl ChatGPTService for ChatToolChatGPT {
     }
 
     fn send(&mut self,text: &String) -> String {
+        if text.trim().len() == 0 {
+            return String::from("No Response");
+        }
         let message = self.generate_message(text.to_string());
         print!("{:?}",message);
         let completion = self.chat_gpt.send_message(message);
@@ -35,7 +38,7 @@ impl ChatGPTService for ChatToolChatGPT {
             self.add_prompt(text.to_string());
             completion.to_string()
         } else {
-            print!("No Response...");
+            print!("Error Response...");
             String::new()
         };
 
