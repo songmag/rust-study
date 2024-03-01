@@ -1,6 +1,5 @@
 use crate::gemma::GemmaAPI;
 use crate::gemma::GemmaResponse;
-use std::io::Read;
 
 use super::GeminiAPIService;
 
@@ -12,10 +11,11 @@ pub struct ChatToolGemini {
 
 impl ChatToolGemini {
     pub fn new(api : GemmaAPI) -> ChatToolGemini {
-        api.talk_to_gemma_with_text("너의 모든 대화 응답은 [ 와 ] 로 감싸져 있어 내가 하는 말은 [] 로 안 감싸져 있는 글자야, 그리고 이전 대화 내용은 ___로 시작하고 ___로 끝나".to_string());
+        let init_prompt :String  = "All of your responses are enclosed in [ and ], while my responses are not enclosed in brackets. The text you generate is not enclosed in brackets either. The previous conversation starts with ___ and ends with ___. Please enclose your response in [ and ].".to_string();
+        api.talk_to_gemma_with_text(&init_prompt);
         ChatToolGemini {
             gemma_api : api,
-            prompt: String::from("너의 모든 대화 응답은 [ 와 ] 로 감싸져 있어 내가 하는 말은 [] 로 안 감싸져 있는 글자야, 그리고 이전 대화 내용은 ___로 시작하고 ___로 끝나")
+            prompt: init_prompt
         }
     }
 }
@@ -26,7 +26,11 @@ impl GeminiAPIService for ChatToolGemini {
     }
 
     fn send(&self, text: &String) -> Option<GemmaResponse> {
-        self.gemma_api.talk_to_gemma_with_text(format!("___{}___\n{}", self.prompt, text))
+        println!("Request... ... ");
+        if text.trim().len() == 0 {
+            return None
+        }
+        self.gemma_api.talk_to_gemma_with_text(&format!("___{}___\n{}", self.prompt, text))
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::gemma::GemmaAPI;
 use crate::gemma::GemmaResponse;
-use std::fs;
+
 use std::io::Read;
 
 use super::GeminiAPIService;
@@ -16,7 +16,7 @@ impl TestToolGemini {
         let mut prompt = String::new();
         for mut file in files {
             let mut file_str = String::new();
-            file.read_to_string(&mut file_str);
+            let _ = file.read_to_string(&mut file_str);
             prompt = format!("{}\n{}",prompt,file_str);
         }
         TestToolGemini {
@@ -32,7 +32,7 @@ impl GeminiAPIService for TestToolGemini {
     }
 
     fn send(&self,text: &String) -> Option<GemmaResponse> {
-        self.gemma_api.talk_to_gemma_with_text(format!("{}\n{}", self.prompt, text))
+        self.gemma_api.talk_to_gemma_with_text(&format!("{}\n{}", self.prompt, text))
     }
 }
 

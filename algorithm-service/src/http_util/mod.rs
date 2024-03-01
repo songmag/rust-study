@@ -1,4 +1,4 @@
-use reqwest::blocking;
+use reqwest::{blocking, header::HeaderMap};
 use serde::{Deserialize, Serialize};
 use std::{error::Error};
 
@@ -25,16 +25,9 @@ impl RequestHost {
     }
 }
 
-pub enum HttpMethod {
-    GET,
-    POST,
-    PATCH,
-    PUT,
-}
 
 pub struct RequestHttp {
     uri: String,
-    method: HttpMethod,
     body: Option<String>,
 }
 
@@ -53,7 +46,7 @@ impl HttpClient {
             None => path.to_string(),
         };
 
-        let result = RequestHttp::new(HttpMethod::GET,
+        let result = RequestHttp::new(
             &self.request_host, 
             Some(&str_path),
             None
@@ -77,23 +70,30 @@ impl HttpClient {
             None => path.to_string(),
         };
 
-        let result = RequestHttp::new(HttpMethod::POST,
+        let result = RequestHttp::new(
             &self.request_host, 
             Some(&str_path),
             Some(&serde_json::to_string(&body).ok()?)
         );
 
-        let str_result = result.post_with_http().unwrap();
+        let mut maps:HeaderMap = HeaderMap::new();
+
+        for header in headers {
+            if header.0 == "Authorization" {
+                maps.append(reqwest::header::AUTHORIZATION, header.1.parse().unwrap());
+            }
+        }
+
+        let str_result = result.post_with_http(maps).unwrap();
         
         Some(
-            serde_json::from_str::<R>(&str_result).expect("Post Result To R")
+            serde_json::from_str::<R>(&str_result).expect(&format!("Error Parsing \n :: {}", str_result))
         )
     }
 }
 
 impl RequestHttp {
     pub fn new(
-        method: HttpMethod,
         host: &RequestHost,
         path: Option<&String>,
         body: Option<&String>,
@@ -105,7 +105,6 @@ impl RequestHttp {
                 }
                 None => host.get_base_url(),
             },
-            method,
             body: match body {
                 Some(item) => Some(item.clone()),
                 None => None,
@@ -113,10 +112,12 @@ impl RequestHttp {
         };
     }
 
-    pub fn post_with_http(&self) -> Result<String, Box<dyn Error>> {
-        let client = blocking::Client::new();
+    pub fn post_with_http(&self, headers: HeaderMap) -> Result<String, Box<dyn Error>> {
+        let client_builder = blocking::ClientBuilder::new();
+        let client = client_builder.timeout(std::time::Duration::from_secs(60)).build().unwrap();
         let rsp = client.post(&self.uri)
         .header("content-type", "application/json")
+        .headers(headers)
         .body(match &self.body {
             Some(item) => {
                 item.clone()
