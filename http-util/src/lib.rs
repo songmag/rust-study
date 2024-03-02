@@ -21,16 +21,27 @@ impl RequestHost {
         RequestHost { protocol, host, port }
     }
     pub fn get_base_url(&self) -> String {
-        return format!("{}://{}:{}", &self.protocol, &self.host, &self.port);
+        format!("{}://{}:{}", &self.protocol, &self.host, &self.port)
     }
 }
 
 
 pub struct RequestHttp {
     uri: String,
+    headers: HeaderMap,
     body: Option<String>,
 }
 
+fn make_headers(headers :&[(String, String)]) -> HeaderMap {
+    let mut maps:HeaderMap = HeaderMap::new();
+
+    for header in headers {
+        if header.0 == "Authorization" {
+            maps.append(reqwest::header::AUTHORIZATION, header.1.parse().unwrap());
+        }
+    }
+    return maps;
+}
 
 impl HttpClient {
     pub fn new(request_host:RequestHost) -> HttpClient {
@@ -46,16 +57,40 @@ impl HttpClient {
             None => path.to_string(),
         };
 
+        let headers = make_headers(headers);
+
         let result = RequestHttp::new(
             &self.request_host, 
             Some(&str_path),
+            headers,
             None
         );
 
         if let Ok(item) = result.get_with_http() {
-            return Some(serde_json::from_str(&item).unwrap());
+            return Some(serde_json::from_str(&item).expect(&format!("unwrap error { } ", &item)));
         }
         return None;
+    }
+
+    pub fn get_to_string(&self, headers: &[(String, String)],path: &str, path_param: Option<Vec<(String, String)>>) -> Option<String> {
+        let str_path = match path_param {
+            Some(params) => generate_path(path, &params),
+            None => path.to_string(),
+        };
+
+        let headers = make_headers(headers);
+
+        let result = RequestHttp::new(
+            &self.request_host, 
+            Some(&str_path),
+            headers,
+            None
+        );
+
+        if let Ok(item) = result.get_with_http() {
+            return Some(item);
+        }
+        return None;    
     }
 
 
@@ -73,18 +108,10 @@ impl HttpClient {
         let result = RequestHttp::new(
             &self.request_host, 
             Some(&str_path),
+            make_headers(headers),
             Some(&serde_json::to_string(&body).ok()?)
         );
-
-        let mut maps:HeaderMap = HeaderMap::new();
-
-        for header in headers {
-            if header.0 == "Authorization" {
-                maps.append(reqwest::header::AUTHORIZATION, header.1.parse().unwrap());
-            }
-        }
-
-        let str_result = result.post_with_http(maps).unwrap();
+        let str_result = result.post_with_http().unwrap();
         
         Some(
             serde_json::from_str::<R>(&str_result).expect(&format!("Error Parsing \n :: {}", str_result))
@@ -96,6 +123,7 @@ impl RequestHttp {
     pub fn new(
         host: &RequestHost,
         path: Option<&String>,
+        headers: HeaderMap,
         body: Option<&String>,
     ) -> RequestHttp {
         return RequestHttp {
@@ -105,6 +133,7 @@ impl RequestHttp {
                 }
                 None => host.get_base_url(),
             },
+            headers: headers,
             body: match body {
                 Some(item) => Some(item.clone()),
                 None => None,
@@ -112,12 +141,12 @@ impl RequestHttp {
         };
     }
 
-    pub fn post_with_http(&self, headers: HeaderMap) -> Result<String, Box<dyn Error>> {
+    pub fn post_with_http(&self) -> Result<String, Box<dyn Error>> {
         let client_builder = blocking::ClientBuilder::new();
         let client = client_builder.timeout(std::time::Duration::from_secs(60)).build().unwrap();
         let rsp = client.post(&self.uri)
         .header("content-type", "application/json")
-        .headers(headers)
+        .headers(self.headers.to_owned())
         .body(match &self.body {
             Some(item) => {
                 item.clone()
@@ -130,8 +159,16 @@ impl RequestHttp {
         Ok(rsp.text().expect("parsing exception response to text"))
     }
 
+
     pub fn get_with_http(&self) -> Result<String, Box<dyn Error>> {
-        Ok(blocking::get(&self.uri)?.text().unwrap())
+        let client_builder = blocking::ClientBuilder::new();
+        let client = client_builder.timeout(std::time::Duration::from_secs(60)).build().unwrap();
+        println!("{}", &self.uri);
+        let response = client.get(&self.uri)
+            .headers(self.headers.to_owned())
+            .send()?;
+        let body = response.text().unwrap(); 
+        Ok(body)
     }
 }
 
@@ -150,8 +187,7 @@ mod test_http {
     use serde::{Deserialize, Serialize};
 
     #[derive(Serialize, Deserialize, Debug)]
-
-    struct JsonPlaceHolderData {
+    struct JsonPlaceHolderData {    
         userId: i32,
         id: i32,
         title: String,
@@ -177,9 +213,9 @@ mod test_http {
         println!(
             "{}",
             generate_path(
-                "/users/{userId}/klassId/{klassId}",
+                "/users/{user_id}/klassId/{klassId}",
                 &vec![
-                    ("userId".to_string(), "t1".to_string()),
+                    ("user_id".to_string(), "t1".to_string()),
                     ("klassId".to_string(), "t2".to_string())
                 ]
             )

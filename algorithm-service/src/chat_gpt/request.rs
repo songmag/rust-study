@@ -16,6 +16,20 @@ impl Message {
 
     pub fn new_request(text:String) -> Message {
         Message {
+            role : String::from("user"),
+            content: text
+        }
+    }
+
+    pub fn new_response(text:String) -> Message {
+        Message {
+            role : String::from("assistant"),
+            content: text
+        }
+    }
+
+    pub fn new_prompt(text:String) -> Message {
+        Message {
             role : String::from("system"),
             content: text
         }
@@ -30,10 +44,10 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new_chat_gpt(message : Vec<Message>) -> Request {
+    pub fn new_chat_gpt(message : Vec<Message>, model:&str) -> Request {
         Request {
-            model : String::from("gpt-3.5-turbo"),
-            temperature : 0.7,
+            model : String::from(model),
+            temperature : 1.0,
             messages: message,
         }
     }

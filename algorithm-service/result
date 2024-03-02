@@ -1,0 +1,1175 @@
+For the `ProductLegalInformationTemplate` class, you can write test cases to ensure the `toCategoryTemplate` method correctly creates a `CategoryTemplate` based on the provided information. The test cases should cover the following scenarios:
+
+1. When a `ProductLegalInformationTemplate` object with valid information is used to create a `CategoryTemplate`.
+2. When a `ProductLegalInformationTemplate` object with null values is used to create a `CategoryTemplate`.
+
+Here's an example of how you can write test cases for the `ProductLegalInformationTemplate` class:
+
+```java
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class ProductLegalInformationTemplateTest {
+
+    @Test
+    @DisplayName("ProductLegalInformationTemplate가 CategoryTemplate으로 정상적으로 변환되어야 한다")
+    void productLegalInformationTemplateToCategoryTemplate() {
+        // Given
+        ProductLegalInformationTemplate productLegalInformationTemplate = ProductLegalInformationTemplate.builder()
+                .name("제품정보")
+                .parameterType("텍스트")
+                .defaultValue("정보없음")
+                .priority(1)
+                .build();
+        
+        Category category = Category.builder().title("가구").build();
+
+        // When
+        CategoryTemplate categoryTemplate = productLegalInformationTemplate.toCategoryTemplate(category);
+
+        // Then
+        assertThat(categoryTemplate.getCategory()).isEqualTo(category);
+        assertThat(categoryTemplate.getName()).isEqualTo("제품정보");
+        assertThat(categoryTemplate.getType()).isEqualTo("텍스트");
+        assertThat(categoryTemplate.getDefaultValue()).isEqualTo("정보없음");
+        assertThat(categoryTemplate.getPriority()).isEqualTo(1);
+        assertThat(categoryTemplate.getTemplateType())
+                .isEqualTo(CategoryTemplate.CategoryTemplateType.LEGAL_INFORMATION);
+    }
+
+    @Test
+    @DisplayName("Null 값을 가지는 ProductLegalInformationTemplate이 입력된 경우에도 CategoryTemplate으로 변환되어야 한다")
+    void productLegalInformationTemplateWithNullValuesToCategoryTemplate() {
+        // Given
+        ProductLegalInformationTemplate productLegalInformationTemplate = ProductLegalInformationTemplate.builder().build();
+        Category category = Category.builder().title("전자기기").build();
+
+        // When
+        CategoryTemplate categoryTemplate = productLegalInformationTemplate.toCategoryTemplate(category);
+
+        // Then
+        assertThat(categoryTemplate.getCategory()).isEqualTo(category);
+        assertThat(categoryTemplate.getName()).isNull();
+        assertThat(categoryTemplate.getType()).isNull();
+        assertThat(categoryTemplate.getDefaultValue()).isNull();
+        assertThat(categoryTemplate.getPriority()).isNull();
+        assertThat(categoryTemplate.getTemplateType())
+                .isEqualTo(CategoryTemplate.CategoryTemplateType.LEGAL_INFORMATION);
+    }
+}
+```
+
+These tests verify that the `toCategoryTemplate` method of the `ProductLegalInformationTemplate` class correctly transforms a `ProductLegalInformationTemplate` object into a `CategoryTemplate` object.```java
+package net.class101.merchant.product.converter;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+public class ProductAttributeSetsConverterTest {
+
+    @Test
+    @DisplayName("올바른 Set<AttributeSet> 이 입력될 때 convertToDatabaseColumn 은 해당 값을 문자열로 반환한다")
+    void convertToDatabaseColumnWithValidInput_Success() throws JsonProcessingException {
+        // Given
+        Set<AttributeSet> attributeSets = new LinkedHashSet<>();
+        attributeSets.add(AttributeSet.of("key1", "value1"));
+        attributeSets.add(AttributeSet.of("key2", "value2"));
+
+        ProductAttributeSetsConverter converter = new ProductAttributeSetsConverter();
+
+        // When
+        String result = converter.convertToDatabaseColumn(attributeSets);
+
+        // Then
+        Assertions.assertThat(result).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("convertToDatabaseColumn 과 convertToEntityAttribute 가 상호 변환이 가능하다")
+    void conversionIsBidirectional() {
+        // Given
+        ProductAttributeSetsConverter converter = new ProductAttributeSetsConverter();
+        Set<AttributeSet> attributeSets = new LinkedHashSet<>();
+        attributeSets.add(AttributeSet.of("key1", "value1"));
+        attributeSets.add(AttributeSet.of("key2", "value2"));
+
+        // When
+        String dbData = converter.convertToDatabaseColumn(attributeSets);
+        Set<AttributeSet> convertedAttributeSets = converter.convertToEntityAttribute(dbData);
+
+        // Then
+        Assertions.assertThat(convertedAttributeSets).isEqualTo(attributeSets);
+    }
+
+    @Test
+    @DisplayName("잘못된 형식의 JSON 문자열을 입력할 때, convertToEntityAttribute 가 JsonProcessingException 던집니다")
+    void convertToEntityAttributeWithInvalidJsonFormat_ExceptionThrown() throws JsonProcessingException {
+        // Given
+        String dbData = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+        ProductAttributeSetsConverter converter = new ProductAttributeSetsConverter();
+
+        // When
+        Assertions.assertThatThrownBy(() -> converter.convertToEntityAttribute(dbData))
+            .isInstanceOf(JsonProcessingException.class);
+    }
+}
+```
+This test class checks whether the `ProductAttributeSetsConverter` class is functioning correctly. Three test methods have been implemented: one that checks if the conversion of the attribute sets is successful, one checking if the conversion is bidirectional, and one verifying that an exception is thrown if an invalid JSON format is given.```java
+package net.class101.merchant.product.converter;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.AttributeConverter;
+import net.class101.merchant.product.model.ProductOption;
+import net.class101.merchant.product.model.ProductOptions;
+import net.class101.merchant.product.problem.ProductProblem;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.*;
+
+@DisplayName("ProductOptionsConverter Test")
+class ProductOptionsConverterTest {
+    
+    @InjectMocks
+    private ProductOptionsConverter productOptionsConverter;
+    
+    @Mock
+    private ObjectMapper objectMapper;
+    
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    @DisplayName("ProductOptions를 DB 컬럼 데이터로 변환한다.")
+    void convertToDatabaseColumn() throws JsonProcessingException {
+        // Given
+        ProductOptions productOptions = ProductOptions.of(Set.of(ProductOption.builder()
+                .key("color")
+                .values(Set.of("red", "blue"))
+                .build()));
+
+        // When
+        String result = productOptionsConverter.convertToDatabaseColumn(productOptions);
+
+        // Then
+        assertThat(result).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("Entity 속성을 ProductOptions로 변환한다.")
+    void convertToEntityAttribute() throws JsonProcessingException {
+        // Given
+        String jsonProductOptions = "{\"{\\\"key\\\": \\\"color\\\", \\\"values\\\": [\\\"red\\\", \\\"blue\\\"]}\"}";
+        ProductOptions expected = ProductOptions.of(Set.of(ProductOption.builder()
+                .key("color")
+                .values(Set.of("red", "blue"))
+                .build()));
+
+        when(objectMapper.<Set<ProductOption>>readValue(jsonProductOptions, new TypeReference<>() {
+        }).thenReturn(Set.of(ProductOption.builder()
+            .key("color")
+            .values(Set.of("red", "blue"))
+            .build()));
+
+        // When
+        ProductOptions result = productOptionsConverter.convertToEntityAttribute(jsonProductOptions);
+
+        // Then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("ProductOptions 변환 시 예외를 처리한다.")
+    void handleProductOptionsConversionException() throws JsonProcessingException {
+        // Given
+        String invalidJsonData = "{\"color\": \"red\", \"values\": [\"red\", \"blue\"]}";
+
+        // When, Then
+        assertThatThrownBy(() -> productOptionsConverter.convertToEntityAttribute(invalidJsonData))
+            .isInstanceOf(ProductProblem.class)
+            .hasMessageContaining("Product Option 데이터 변환에 실패했습니다.");
+    }
+}
+``````java
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+public class ProductContentsConverterTest {
+
+    private final ProductContentsConverter converter = new ProductContentsConverter();
+
+    @Test
+    @DisplayName("String 집합을 JSON 형식으로 반환한다")
+    void convertToDatabaseColumn() {
+        // Given
+        Set<String> attributes = new LinkedHashSet<>(Set.of("key1", "key2"));
+
+        // When
+        String json = converter.convertToDatabaseColumn(attributes);
+
+        // Then
+        assertThat(json).isNotNull();
+    }
+
+    @Test
+    @DisplayName("JSON 형식을 String 집합으로 반환한다")
+    void convertToEntityAttribute() {
+        // Given
+        String json = "[\"key1\", \"key2\"]";
+
+        // When
+        Set<String> attributes = converter.convertToEntityAttribute(json);
+
+        // Then
+        assertThat(attributes).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("Null을 반환할 때는 빈 집합을 반환한다")
+    void convertToEntityAttributeWithNull() {
+        // When
+        Set<String> attributes = converter.convertToEntityAttribute(null);
+
+        // Then
+        assertThat(attributes).isEmpty();
+    }
+}
+```
+In the test code, `@Test` annotation is used to define test methods and `@DisplayName` annotation is used to provide a clear description for each test method. The `assertThat` method from AssertJ is used to perform assertions. Mocking is used to mock the `OBJECT_MAPPER` object from the `ObjectMapper` class.```java
+package net.class101.merchant.product.converter;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.AttributeConversionException;
+import net.class101.merchant.product.problem.ProductProblem;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import java.io.IOException;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+@SpringBootTest
+public class ProductTagsConverterTest {
+
+    @Nested
+    @DisplayName("convertToDatabaseColumn method test")
+    class ConvertToDatabaseColumn {
+
+        private final ObjectMapper objectMapper = new ObjectMapper();
+        private final ProductTagsConverter productTagsConverter = new ProductTagsConverter();
+
+        @Test
+        @DisplayName("Convert when there is no attribute")
+        void nullAttributeList() {
+            assertThat(productTagsConverter.convertToDatabaseColumn(null)).isNull();
+        }
+
+        @Test
+        @DisplayName("Convert when attribute is not null or empty")
+        void convertToDatabaseColumn() throws IOException {
+            Set<String> attributes = new LinkedHashSet<>();
+            attributes.add("tag1");
+            attributes.add("tag2");
+
+            String expectedValue = objectMapper.writeValueAsString(attributes);
+            assertThat(productTagsConverter.convertToDatabaseColumn(attributes)).isEqualTo(expectedValue);
+        }
+
+        @Test
+        @DisplayName("Converting an exception is handled by throwing an ProductProblem exception")
+        void convertToDatabaseColumn_WhenObjectMapperWriteValueAsStringFail() throws IOException {
+            Set<String> attributes = new LinkedHashSet<>();
+            attributes.add("tag1");
+            attributes.add("tag2");
+
+            ObjectMapper mockMapper = mock(ObjectMapper.class);
+            when(mockMapper.writeValueAsString(attributes)).thenThrow(IOException.class);
+
+            ProductTagsConverter productTagsConverter = new ProductTagsConverter();
+            assertThatThrownBy(() -> productTagsConverter.convertToDatabaseColumn(attributes))
+                .isInstanceOf(ProductProblem.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("convertToEntityAttribute method test")
+    class ConvertToEntityAttribute {
+
+        private final ObjectMapper objectMapper = new ObjectMapper();
+        private final ProductTagsConverter productTagsConverter = new ProductTagsConverter();
+
+        @Test
+        @DisplayName("Convert when dbData is NULL")
+        void nullDatabaseData() {
+            assertThat(productTagsConverter.convertToEntityAttribute(null)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Convert JSON String to Set<String>")
+        void convertToEntityAttribute() throws IOException {
+            Set<String> expectedAttributeList = new LinkedHashSet<>();
+            expectedAttributeList.add("tag1");
+            expectedAttributeList.add("tag2");
+
+            String jsonValue = objectMapper.writeValueAsString(expectedAttributeList);
+            Set<String> attributeList = productTagsConverter.convertToEntityAttribute(jsonValue);
+            assertThat(attributeList).isEqualTo(expectedAttributeList);
+        }
+
+        @Test
+        @DisplayName("Converting an exception is handled by throwing an ProductProblem exception")
+        void convertToEntityAttribute_WhenObjectMapperReadValueFail() throws IOException {
+            String json = "\"error\": false";
+            assertThatThrownBy(() -> productTagsConverter.convertToEntityAttribute(json))
+                .isInstanceOf(ProductProblem.class);
+        }
+    }
+}
+```
+In the test code: 
+1. Verify the expected condition when converting from attribute set to string format in `convertToDatabaseColumn`.
+2. Verify the expected condition when converting from string format to attribute set in `convertToEntityAttribute`.
+3. Validate the handling of exceptions and the right exception is thrown.
+4. Use mocks to handle the exception conversion.```java
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+@DisplayName("ProductPolicyProblem 테스트")
+class ProductPolicyProblemTest {
+
+    @Nested
+    @DisplayName("Variant을 찾을 수 없는 경우")
+    class Describe_productPolicyProblemNotFoundVariant {
+
+        @Test
+        @DisplayName("해당 코드를 사용하여 'Variant을 찾을 수 없다' 문제가 발생한다")
+        void itThrowsProductPolicyProblemNotFoundVariantProblem() {
+            // Given
+            final String code = "E001";
+
+            // When
+            ProductPolicyProblem problem = ProductPolicyProblem.notFoundVariant(code);
+
+            // Then
+            assertThat(problem.getTitle()).isEqualTo("Variant을 찾을 수 없습니다.");
+            assertThat(problem.getCode()).isEqualTo(ProductErrorCode.VARIANT_NOT_FOUND.getCode());
+            assertThat(problem.getDetail().getAttribute("code")).isEqualTo(code);
+        }
+    }
+}
+``````java
+package net.class101.merchant.product.problem;
+
+import net.class101.corona.problem.Problem;
+import net.class101.corona.problem.ProblemParameters;
+import net.class101.merchant.product.problem.ProductErrorCode;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
+
+public class ProductProblemTest {
+
+    @Test
+    @DisplayName("상품이 존재하지 않는 경우")
+    void notFoundProduct() {
+        String productCode = "123";
+        Problem problem = ProductProblem.notFoundProduct(productCode);
+        assertAll(
+            () -> assertThat(problem.getTitle()).isEqualTo("상품이 존재하지 않습니다."),
+            () -> assertThat(problem.getCode()).isEqualTo("NOT_FOUND PRODUCT"),
+            () -> assertThat(problem.getDetail().contains("code")).isTrue()
+        );
+    }
+
+    @Test
+    @DisplayName("판매 수량이 최대값을 초과할 경우")
+    void purchaseQuantityNotBeGreaterThanMaximum() {
+        int min = 1;
+        int max = 10;
+        Problem problem = ProductProblem.purchaseQuantityNotBeGreaterThanMaximum(min, max);
+        assertAll(
+            () -> assertThat(problem.getTitle()).isEqualTo("정확하지 않은 판매 수량 최대값입니다."),
+            () -> assertThat(problem.getCode()).isEqualTo("PURCHASE QUANTITY MINIMUM NOT GREATER THAN MAXIMUM"),
+            () -> assertThat(problem.getDetail().contains("min")).isTrue(),
+            () -> assertThat(problem.getDetail().contains("max")).isTrue()
+        );
+    }
+
+    @Test
+    @DisplayName("상품 속성 변환에 실패한 경우")
+    void failConvertProductTags() {
+        String message = "상품 태그 변환에 실패하였습니다.";
+        Problem problem = ProductProblem.failConvertProductTags(message);
+        assertAll(
+            () -> assertThat(problem.getTitle()).isEqualTo("상품 태그 변환에 실패했습니다."),
+            () -> assertThat(problem.getCode()).isEqualTo("INVALID PRODUCT TAGS"),
+            () -> assertThat(problem.getDetail().contains("message")).isTrue()
+        );
+    }
+
+    @Test
+    @DisplayName("상품 속성 변환 중 중복된 상품 속성 키가 발생한 경우")
+    void duplicateProductOptionName() {
+        String name = "size";
+        Problem problem = ProductProblem.duplicateProductOptionName(name);
+        assertAll(
+            () -> assertThat(problem.getTitle()).isEqualTo("중복된 상품 옵션 키가 발생하였습니다."),
+            () -> assertThat(problem.getCode()).isEqualTo("DUPLICATE PRODUCT OPTION KEY"),
+            () -> assertThat(problem.getDetail().contains("name")).isTrue()
+        );
+    }
+}
+``````java
+package net.class101.merchant.product.model;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import java.util.*;
+
+import static net.class101.merchant.product.model.ProductFixture.makeSimpleActivated;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+public class ProductTest {
+
+    @Test
+    @DisplayName("삭제를 요청할 때 상품이 판매중인 경우 ProductProblem 에러가 발생한다")
+    public void deleteProductOnSale() {
+        // Given
+        Product product = makeSimpleActivated("product1", "storeId");
+        product.changeOnSale();
+
+        // When, Then
+        assertThatThrownBy(product::delete)
+            .isInstanceOf(ProductProblem.class);
+    }
+}
+
+``````java
+package net.class101.merchant.product.model;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+public class ProductOptionsTest {
+
+    @Test
+    @DisplayName("ProductOption 이 없는 경우 isEmpty 는 true 를 리턴한다")
+    void productOptionsIsEmpty() {
+        ProductOptions productOptions = ProductOptions.empty();
+        assertThat(productOptions.isEmpty()).isTrue();
+    }
+
+    @Test
+    @DisplayName("ProductOption 이 비어있지 않을 경우 isEmpty 는 false 를 리턴한다")
+    void productOptionsIsNotEmpty() {
+        Set<ProductOption> options = new LinkedHashSet<>();
+        options.add(ProductOption.builder().key("color").build());
+        ProductOptions productOptions = ProductOptions.of(options);
+        assertThat(productOptions.isEmpty()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ProductOption 이 비어있는 경우, ProductProblem not found productOption 예외가 발생한다")
+    void findProductOptionWhenProductOptionIsEmpty() {
+        ProductOptions productOptions = ProductOptions.empty();
+
+        assertThatThrownBy(() -> productOptions.getProductOptionByKey("color"))
+                .isInstanceOf(ProductProblem.class)
+                .hasMessage("해당하는 Product Option을 찾을 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("ProductOption 이 존재하고, 해당 option name 이 없는 경우, ProductProblem not found productOption 예외가 발생한다")
+    void findProductOptionWhenProductOptionContainsKey() {
+        ProductOption productOption = ProductOption.builder().key("color").build();
+        Set<ProductOption> options = new LinkedHashSet<>();
+        options.add(productOption);
+        ProductOptions productOptions = ProductOptions.of(options);
+
+        assertThatThrownBy(() -> productOptions.getProductOptionByKey("size"))
+                .isInstanceOf(ProductProblem.class)
+                .hasMessage("해당하는 Product Option을 찾을 수 없습니다.");
+    }
+
+    @Test
+    @DisplayName("이미 존재하는 Product Option이 추가로 존재한 경우, ProductProblem duplicateProductOption 예외가 발생한다")
+    void checkDuplicateProductOption() {
+        ProductOption existingProductOption = ProductOption.builder().key("color").build();
+        Set<ProductOption> options = new LinkedHashSet<>();
+        options.add(existingProductOption);
+        ProductOptions productOptions = ProductOptions.of(options);
+        ProductOption duplicateProductOption = ProductOption.builder().key("color").build();
+
+        assertThatThrownBy(() -> productOptions.checkDuplicateOption(duplicateProductOption))
+                .isInstanceOf(ProductProblem.class)
+                .hasMessage("이미 동일한 제품옵션이 존재합니다.");
+    }
+
+    @Test
+    @DisplayName("같은 key값을 가진 Product Option이 이미 존재하는 경우, ProductProblem duplicateProductOptionName 예외가 발생한다")
+    void checkDuplicateProductOptionName() {
+        ProductOption existingProductOption = ProductOption.builder().key("color").build();
+        Set<ProductOption> options = new LinkedHashSet<>();
+        options.add(existingProductOption);
+        ProductOptions productOptions = ProductOptions.of(options);
+
+        assertThatThrownBy(() -> productOptions.checkDuplicateOptionKey("color"))
+                .isInstanceOf(ProductProblem.class)
+                .hasMessage("이미 동일한 제품옵션이 존재합니다.");
+    }
+
+    @Test
+    @DisplayName("해당 key에 이미 존재하는 option 값을 추가하려 할 시, ProductProblem duplicateProductOptionValue 예외가 발생한다")
+    void checkDuplicateProductOptionValue() {
+        Set<ProductOption> options = new LinkedHashSet<>();
+        ProductOption existingProductOption = ProductOption.builder()
+                .key("color")
+                .values("red")
+                .build();
+        options.add(existingProductOption);
+        ProductOptions productOptions = ProductOptions.of(options);
+
+        assertThatThrownBy(() -> productOptions.checkDuplicateOptionValue("color", "red"))
+                .isInstanceOf(ProductProblem.class)
+                .hasMessage("이미 동일한 품목의 값을 존재합니다.");
+    }
+}
+```
+This code will test the basic functionality of the `ProductOptions` class. It tests various scenarios related to the availability of product options, adding or appending new options, checking for duplicates, and handling exceptions accordingly. The test class verifies that the appropriate exceptions are thrown in certain situations where operations fail due to incorrect input or violating the correct data structure.```java
+import net.class101.merchant.product.model.ProductShippingPolicy;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class ProductShippingPolicyTest {
+
+    @Test
+    @DisplayName("ProductShippingPolicy 객체를 생성할 수 있다.")
+    void createProductShippingPolicy() {
+        // given
+        ProductShippingPolicy policy = ProductShippingPolicy.builder()
+                .shippingFee(Money.of(2000L, Currency.USD))
+                .shippingBundleFee(Money.of(1000L, Currency.USD))
+                .shippingPolicyType(Product.ShippingPolicyType.AMOUNT_MORE)
+                .shippingPolicyValue(30000)
+                .build();
+
+        // then
+        assertThat(policy).isNotNull();
+        assertThat(policy.getShippingFee()).isEqualTo(Money.of(2000L, Currency.USD));
+        assertThat(policy.getShippingBundleFee()).isEqualTo(Money.of(1000L, Currency.USD));
+        assertThat(policy.getShippingPolicyType()).isEqualTo(Product.ShippingPolicyType.AMOUNT_MORE);
+        assertThat(policy.getShippingPolicyValue()).isEqualTo(30000);
+    }
+
+    @Test
+    @DisplayName("특정 값을 변경하면 ProductShippingPolicy의 정보가 변경된다.")
+    void changeProductShippingPolicyAttributes() {
+        // given
+        ProductShippingPolicy policy = ProductShippingPolicy.builder()
+                .shippingFee(Money.of(2000L, Currency.USD))
+                .shippingBundleFee(Money.of(1000L, Currency.USD))
+                .shippingPolicyType(Product.ShippingPolicyType.AMOUNT_MORE)
+                .shippingPolicyValue(30000)
+                .build();
+
+        // when
+        policy.changeShippingFee(Money.of(1500L, Currency.USD));
+        policy.changeShippingBundleFee(Money.of(800L, Currency.USD));
+        policy.changePolicyType(Product.ShippingPolicyType.FREE);
+        policy.changePolicyValue(50000);
+
+        // then
+        assertThat(policy.getShippingFee()).isEqualTo(Money.of(1500L, Currency.USD));
+        assertThat(policy.getShippingBundleFee()).isEqualTo(Money.of(800L, Currency.USD));
+        assertThat(policy.getShippingPolicyType()).isEqualTo(Product.ShippingPolicyType.FREE);
+        assertThat(policy.getShippingPolicyValue()).isEqualTo(50000);
+    }
+}
+``````java
+package net.class101.merchant.product.model;
+
+import net.class101.common.money.model.Currency;
+import net.class101.common.money.model.Money;
+import net.class101.common.money.model.TaxBehavior;
+import net.class101.merchant.producttype.model.ProductTypeFixture;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.time.ZonedDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class ProductHistoryTest {
+
+    @Test
+    @DisplayName("Product 에 대한 변경 사항을 담는 ProductHistory 생성 - minPurchaseQuantity 가 변경된 경우")
+    void makeProductHistoryWhenMinPurchaseQuantityIsChanged() {
+        // Given
+        Product product = ProductFixture.makeSimpleActivated("테스트 상품", "store1");
+        ProductHistory expectedProductHistory = ProductHistory.builder()
+                                                .product(product)
+                                                .minPurchaseQuantity(10)
+                                                .build();
+
+        product.changeMinPurchaseQuantity(10);
+
+        // When
+        ProductHistory actualProductHistory = ProductHistory.of(product, "Admin");
+
+        // Then
+        assertThat(actualProductHistory).usingRecursiveComparison().isEqualTo(expectedProductHistory);
+    }
+
+    @Test
+    @DisplayName("Product 에 대한 변경 사항을 담는 ProductHistory 생성 - 이벤트 발생 시간이 있는 경우")
+    void makeProductHistoryWithUpdatedTime() {
+        // Given
+        ZonedDateTime eventTime = ZonedDateTime.now().minusDays(2);
+        Product product = ProductFixture.makeSimpleActivated("테스트 상품", "store1");
+        ProductHistory expectedProductHistory = ProductHistory.builder()
+                                                .product(product)
+                                                .author("Admin")
+                                                .updatedAt(eventTime)
+                                                .build();
+
+        // When
+        ProductHistory actualProductHistory = ProductHistory.of(product, "Admin", eventTime);
+
+        // Then
+        assertThat(actualProductHistory).usingRecursiveComparison().isEqualTo(expectedProductHistory);
+    }
+
+    @Test
+    @DisplayName("Product 변경 사항을 담는 ProductHistory 생성 - 상품이 삭제된 경우")
+    void makeProductHistoryWhenProductIsDeleted() {
+        // Given
+        Product product = ProductFixture.makeSimpleActivated("테스트 상품", "store1");
+        ProductHistory expectedProductHistory = ProductHistory.builder()
+                                                .product(product)
+                                                .id((long) 12345)
+                                                .build();
+
+        // When
+        product.deleteById((long) 12345); 
+        ProductHistory actualProductHistory = ProductHistory.of(product, "Admin");
+
+        // Then
+        Assertions.assertThat(actualProductHistory).usingRecursiveComparison().isEqualTo(expectedProductHistory);
+    }
+}
+``````java
+package net.class101.merchant.product.model;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.util.LinkedHashSet;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+@DisplayName("ProductOption 클래스")
+public class ProductOptionTest {
+
+    @Test
+    @DisplayName("ProductOption 생성 시 key와 values가 주어진다")
+    void createProductOption() {
+        // Given
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.add("red");
+        values.add("blue");
+
+        // When
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        // Then
+        assertThat(productOption.getKey()).isEqualTo("color");
+        assertThat(productOption.getValues()).containsExactlyInAnyOrder("red", "blue");
+    }
+
+    @Test
+    @DisplayName("ProductOption에 value를 추가하는 경우 values에 추가된다")
+    void appendValue() {
+        // Given
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(new LinkedHashSet<>())
+            .build();
+
+        // When
+        productOption.appendValue("white");
+
+        // Then
+        assertThat(productOption.getValues()).containsExactly("white");
+    }
+
+    @Test
+    @DisplayName("ProductOption의 key를 수정하는 경우 수정된 key로 반환한다")
+    void changeKey() {
+        // Given
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(new LinkedHashSet<>())
+            .build();
+
+        // When
+        productOption.changeKey("color_blue");
+
+        // Then
+        assertThat(productOption.getKey()).isEqualTo("color_blue");
+    }
+
+    @Test
+    @DisplayName("ProductOption의 value를 수정하는 경우 수정된 value로 변경된다")
+    void changeValue() {
+        // Given
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.add("red");
+        values.add("blue");
+
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        // When
+        productOption.changeValue("red", "black");
+
+        // Then
+        assertThat(productOption.getValues()).containsExactlyInAnyOrder("black", "blue");
+    }
+
+    @Test
+    @DisplayName("ProductOption에 value를 수정하는데 해당 value가 없을 때 예외가 발생한다")
+    void changeValueWhenValueNotFoundException() {
+        // Given
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.add("red");
+        values.add("blue");
+
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        // When, Then
+        assertThatThrownBy(() -> productOption.changeValue("white", "black"))
+            .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    @DisplayName("ProductOption의 toString 메서드는 key와 values를 문자열로 나타낸다")
+    void testToString() {
+        // Given
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.add("red");
+        values.add("blue");
+
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        // When, Then
+        assertThat(productOption.toString()).isEqualTo("{key='color', values=[red, blue]}");
+    }
+
+    @Test
+    @DisplayName("ProductOption의 동등성 비교가 정상적으로 동작한다")
+    void testEquals() {
+        // Given
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.add("red");
+        values.add("blue");
+
+        ProductOption productOptionA = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        ProductOption productOptionB = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        // When, Then
+        assertThat(productOptionA).isEqualTo(productOptionB);
+    }
+
+    @Test
+    @DisplayName("ProductOption의 hashCode 메서드는 정상적으로 동작한다")
+    void testHashCode() {
+        // Given
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        values.add("red");
+        values.add("blue");
+
+        ProductOption productOption = ProductOption.builder()
+            .key("color")
+            .values(values)
+            .build();
+
+        // When, Then
+        assertThat(productOption.hashCode()).isEqualTo(productOption.hashCode());
+    }
+}
+```
+```java
+import net.class101.merchant.product.event.ProductCreatedEvent;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.*;
+
+public class ProductCreatedEventTest {
+
+    @Test
+    @DisplayName("ProductCreatedEvent 를 생성하면 ShouldBeTimelinePublished 값은 false 를 반환해야 한다")
+    void createProductCreatedEventShouldReturnFalseForShouldBeTimelinePublished() {
+        ProductCreatedEvent event = new ProductCreatedEvent("PROD-001");
+
+        assertThat(event.shouldBeTimelinePublished()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ProductCreatedEvent 를 생성하면 TimelineAttributes 가 Null 을 반환해야 한다")
+    void createProductCreatedEventShouldReturnNullForTimelineAttributes() {
+        ProductCreatedEvent event = new ProductCreatedEvent("PROD-002");
+
+        assertThat(event.getTimelineAttributes()).isNull();
+    }
+
+    @Test
+    @DisplayName("ProductCreatedEvent 를 생성하면 LocalizedMessageId 는 Null 을 반환해야 한다")
+    void createProductCreatedEventShouldReturnNullForLocalizedMessageId() {
+        ProductCreatedEvent event = new ProductCreatedEvent("PROD-003");
+
+        assertThat(event.getLocalizeMessageId()).isNull();
+    }
+
+    @Test
+    @DisplayName("ProductCreatedEvent 의 productId 는 생성자에서 받은 값을 반환해야 한다")
+    void getProductReturnsProductId() {
+        ProductCreatedEvent event = new ProductCreatedEvent("PROD-004");
+
+        assertThat(event.getProductId()).isEqualTo("PROD-004");
+    }
+}
+``````java
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+public class ExistsProductTypeProblemTest {
+
+    @Test
+    @DisplayName("상품 유형이 이미 존재할 때, 문제 객체가 생성되어야 합니다")
+    void createExistsProductTypeProblem() {
+        ExistsProductTypeProblem existsProductTypeProblem = new ExistsProductTypeProblem();
+
+        assertThat(existsProductTypeProblem.getMessage()).isEqualTo("이미 존재하는 상품 유형입니다.");
+        assertThat(existsProductTypeProblem.getErrorCode().getCode()).isEqualTo("product/exists-product-type");
+        assertThat(existsProductTypeProblem.getErrorCode().getErrorCategory()).isEqualTo(ErrorCategory.INVALID_REQUEST);
+    }
+}
+``````java
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+public class ProductTypeMetadataSchemaTest {
+
+    private ProductTypeMetadataSchema productTypeMetadataSchema;
+
+    @BeforeEach
+    void setUp() {
+       productTypeMetadataSchema = ProductTypeMetadataSchema.fromJson("""
+            {
+                "name": {
+                    "type": "string",
+                    "label": "제품명",
+                    "required": true
+                },
+                "price": {
+                    "type": "number",
+                    "label": "가격",
+                    "required": false
+                }
+            }
+       """);
+    }
+
+    @Test
+    @DisplayName("Validates the input metadata")
+    void validateInputMetadata() {
+        Map<String, Object> metadata = new HashMap<>();
+        assertThat(productTypeMetadataSchema.validate(metadata)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Validates the input metadata with all required fields")
+    void validateInputMetadataWithRequiredFields() {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("name", "Product A");
+        assertThat(productTypeMetadataSchema.validate(metadata)).isFalse();
+    }
+
+    @Test
+    @DisplayName("Validation failed when invalid metadata format is provided")
+    void validationFailedForInvalidMetadataFormat() {
+        assertThatThrownBy(() -> new ProductTypeMetadataSchema("")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+}
+```
+In this test case scenario, we are expecting that all metadata fields should be present in the `validate` method. The test case validates the input metadata, checks for metadata with all required fields, and also validates the metadata for any exceptions that may be thrown when an invalid metadata format is provided.```java
+import net.class101.merchant.producttype.model.ProductTypeMetadataPropertySchema;
+import net.class101.merchant.producttype.model.ProductTypeFixture;
+import net.class101.merchant.producttype.model.ProductTypeMetadataPropertySchemaFixture;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+public class ProductTypeMetadataPropertySchemaTest {
+
+    @Test
+    @DisplayName("특정 키값을 갖는 인스턴스 validations이 되어야 한다.")
+    void validateKey() {
+        // Given
+        String key = null;
+        String dataType = "string";
+        String label = "파일명";
+        Boolean isRequired = true;
+
+        // When, Then
+        assertThatThrownBy(() -> ProductTypeMetadataPropertySchema.builder()
+                .key(key)
+                .dataType(dataType)
+                .label(label)
+                .isRequired(isRequired)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("key is null or empty");
+    }
+
+    @Test
+    @DisplayName("dataType이 올바르게 설정되지 않은 경우 IllegalArgumentException이 발생된다.")
+    void validateDataType() {
+        // Given
+        String key = "fileName";
+        String dataType = "None";
+        String label = "파일명";
+        Boolean isRequired = true;
+
+        // When, Then
+        assertThatThrownBy(() -> ProductTypeMetadataPropertySchema.builder()
+                .key(key)
+                .dataType(dataType)
+                .label(label)
+                .isRequired(isRequired)
+                .build())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("dataType is not string or number");
+    }
+
+    @Test
+    @DisplayName("값이 제대로 유효성 검사가 진행된다.")
+    void validateSuccess() {
+        // Given
+        String key = "fileName";
+        String label = "파일명";
+        Boolean isRequired = true;
+        ProductTypeMetadataPropertySchema schema = ProductTypeMetadataPropertySchema.builder()
+            .key(key)
+            .dataType("string")
+            .label(label)
+            .isRequired(isRequired)
+            .build();
+
+        // When, Then
+        assertThat(schema.validate("test")).isTrue();
+    }
+
+    @Test
+    @DisplayName("값이 null이여도 유효성 검사에 성공한다.")
+    void validateNullSuccess() {
+        // Given
+        String key = "fileName";
+        String label = "파일명";
+        Boolean isRequired = true;
+        ProductTypeMetadataPropertySchema schema = ProductTypeMetadataPropertySchema.builder()
+            .key(key)
+            .dataType("string")
+            .label(label)
+            .isRequired(isRequired)
+            .build();
+
+        // When, Then
+        assertThat(schema.validate(null)).isTrue();
+    }
+
+    @Test
+    @DisplayName("값이 null이면서 isRequired가 true 일 때 유효성 검사에 실패한다.")
+    void validateNullFailed() {
+        // Given
+        String key = "fileName";
+        String label = "파일명";
+        Boolean isRequired = true;
+        ProductTypeMetadataPropertySchema schema = ProductTypeMetadataPropertySchema.builder()
+            .key(key)
+            .dataType("string")
+            .label(label)
+            .isRequired(isRequired)
+            .build();
+
+        // When, Then
+        assertThat(schema.validate(null)).isFalse();
+    }
+}
+``````java
+package net.class101.merchant.producttype.model;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityTransaction;
+import jakarta.persistence.Persistence;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+public class ProductTypeTest {
+
+    private EntityManagerFactory entityManagerFactory;
+    private EntityManager entityManager;
+    private EntityTransaction transaction;
+
+    @BeforeEach
+    void setUp() {
+        entityManagerFactory = Persistence.createEntityManagerFactory("ProductTypePU");
+        entityManager = entityManagerFactory.createEntityManager();
+        transaction = entityManager.getTransaction();
+        transaction.begin();
+    }
+
+    @AfterEach
+    void tearDown() {
+        transaction.rollback();
+        entityManager.close();
+        entityManagerFactory.close();
+    }
+
+    @Test
+    void updateSchema_withMetadataSchemaJson_thenIncreaseVersion() {
+        // Given
+        ProductType initialProductType = new ProductType("TestId", "Test Display Name", "{ }", null, 0);
+        entityManager.persist(initialProductType);
+
+        // When
+        ProductType updatedProductType = initialProductType.updateSchema("{ \"field\": { \"type\": \"string\"} }");
+        entityManager.persist(updatedProductType);
+
+        // Then
+        ProductType foundProductType = entityManager.find(ProductType.class, initialProductType.getGid());
+        assertThat(foundProductType.getCurrentVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void updateSchema_withSameMetadataSchemaJson_thenReturnCurrentProductType() {
+        // Given
+        ProductType initialProductType = new ProductType("TestId", "Test Display Name", "{ \"schema\": { \"type\": \"string\"} }", null, 0);
+        entityManager.persist(initialProductType);
+
+        // When
+        ProductType updatedProductType = initialProductType.updateSchema("{ \"schema\": { \"type\": \"string\"} }");
+        entityManager.persist(updatedProductType);
+
+        // Then
+        ProductType foundProductType = entityManager.find(ProductType.class, initialProductType.getGid());
+        assertThat(foundProductType).isEqualTo(initialProductType);
+    }
+
+    @Test
+    void getCurrentVersion_withInitialProductType_thenReturnZero() {
+        // Given
+        ProductType productType = new ProductType("TestId", "Test Display Name", "{ \"schema\": { \"type\": \"string\"} }", null, 0);
+
+        // When & Then
+        assertThat(productType.getCurrentVersion()).isZero();
+    }
+
+}
+```

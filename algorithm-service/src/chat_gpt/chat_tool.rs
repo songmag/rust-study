@@ -15,16 +15,15 @@ impl ChatToolChatGPT {
     }
 
     fn generate_message(&mut self, text: String) -> Vec<Message> {
-        let mut result_message = self.prompt.to_vec();
-        result_message.push(Message::new_user_message(text.to_string()));
-        return result_message.to_vec();
+        self.prompt.push(Message::new_user_message(text.to_string()));
+        return self.prompt.to_vec();
     }
 }
 
 impl ChatGPTService for ChatToolChatGPT {
     
     fn add_prompt(&mut self,text: String) {
-        self.prompt.push(Message::new_request(text.to_string()));
+        self.prompt.push(Message::new_response(text.to_string()));
     }
 
     fn send(&mut self,text: &String) -> String {
@@ -32,10 +31,10 @@ impl ChatGPTService for ChatToolChatGPT {
             return String::from("No Response");
         }
         let message = self.generate_message(text.to_string());
-        print!("{:?}",message);
-        let completion = self.chat_gpt.send_message(message);
+        // print!("{:?}",message);
+        let completion = self.chat_gpt.send_message_gpt4(message);
         let item = if let Some(completion) = completion {
-            self.add_prompt(text.to_string());
+            self.add_prompt(completion.to_string());
             completion.to_string()
         } else {
             print!("Error Response...");

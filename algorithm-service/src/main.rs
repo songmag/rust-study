@@ -1,6 +1,5 @@
 mod service;
 mod gemma;
-mod http_util;
 mod file_finder;
 mod chat_gpt;
 

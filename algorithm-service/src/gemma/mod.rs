@@ -3,7 +3,7 @@ mod test_tool;
 mod chat_tool;
 mod request;
 
-use crate::http_util;
+use http_util;
 
 pub use self::response::*;
 pub use self::request::*;

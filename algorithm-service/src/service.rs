@@ -30,11 +30,12 @@ impl Args {
 pub fn run() {
     let system_args: Vec<String> = env::args().collect();
     println!("{:?}", system_args);
-    let files: Vec<File> = crate::file_finder::find_files(".", ".env.config");
+    let files = crate::file_finder::find_files(".", ".env.config");
     let mut args: Args = Args::new();
     for mut file in files {
         let mut env_file_result = String::new();
-        file.read_to_string(&mut env_file_result)
+        file.1
+            .read_to_string(&mut env_file_result)
             .expect("read file error");
         let env_vector: Vec<String> = env_file_result
             .trim()
@@ -46,36 +47,72 @@ pub fn run() {
     }
     match system_args.get(1) {
         Some(ai_module) => {
-            if(ai_module == "chatgpt") {
-                chat_service::run_with_args(&args);
-            }
-            else {
-                gemma_service::run_with_args(&args);    
+            if ai_module == "chatgpt" {
+                chat_service::run_with_args(&args, String::from("chat"));
+            } else if ai_module == "chatgpt-pg" {
+                chat_service::run_with_args(&args, String::from("pg"));
+            } else {
+                gemma_service::run_with_args(&args);
             }
         }
         None => {
             gemma_service::run_with_args(&args);
-        },
+        }
     }
 }
 
 pub mod chat_service {
-    use crate::{service, chat_gpt::{self, ChatToolChatGPT, ChatGPTService}};
-    pub(crate) fn run_with_args(args: &service::Args) {
+    use std::fs::File;
+
+    use crate::{
+        chat_gpt::{self, ChatGPTService, ChatToolChatGPT, ProgrammingToolChatGPT},
+        service,
+    };
+
+    use super::read_string;
+    pub(crate) fn run_with_args(args: &service::Args, model: String) {
         let api_key: String = args
             .configs
             .get("CHAT_GPT_API")
             .expect("NOT FOUND Chat gpt Api key")
             .to_string();
-        let chat_gpt = chat_gpt::ChatGPT::new(api_key);
 
-        let mut chat_tool: Box<dyn ChatGPTService> = Box::new(ChatToolChatGPT::new(chat_gpt));
+        let chat_gpt = chat_gpt::ChatGPT::new(api_key);
+        let mut chat_tool: Box<dyn ChatGPTService>;
+        if model == "pg" {
+            let workspace = args.configs.get("WORK_SPACE");
+            
+            let mut prompt_files = vec![
+                Box::new(File::open("./test-prompt").unwrap()),
+                Box::new(File::open("./response").unwrap()),
+            ];
+
+            match workspace {
+                Some(item) => {
+                    chat_tool = Box::new(ProgrammingToolChatGPT::new(
+                        chat_gpt,
+                        &mut prompt_files,
+                        item.to_string(),
+                    ));
+                }
+                None => {
+                    println!("\nPlease Write Workspace");
+                    chat_tool = Box::new(ProgrammingToolChatGPT::new(
+                        chat_gpt,
+                        &mut prompt_files,
+                        read_string().trim().to_string()  
+                    ));
+                }
+            }
+        } else {
+            chat_tool = Box::new(ChatToolChatGPT::new(chat_gpt));
+        }
 
         loop {
             print!("reading... >>>\n");
             let cli_read = service::read_string();
             let response = chat_tool.send(&cli_read.trim().to_string());
-            println!("resposne \n {}",response);
+            println!("resposne \n {}", response);
         }
     }
 }

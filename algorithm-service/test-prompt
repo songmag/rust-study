@@ -1,0 +1,365 @@
+### Test Writing Guide
+
+1. Use `import static org.assertj.core.api.Assertions.assertThat;` for assertions.
+2. Use `import static org.assertj.core.api.Assertions.assertThatThrownBy;` for asserting exceptions.
+3. Only the Fixture uses the given Fixture Class. The naming convention for the Fixture Class is [ClassName]Fixture.
+4. Mock all repositories for test case creation.
+5. If there is a `@Component` and `@RequiredArgsConstructor`, mock the final variables of Member using Mockito.
+6. Write test codes based on BDD. Use Nested to separate higher-level tests.
+7. All objects do not have setters; use constructors or builders instead.
+8. The description of the test is explained using Junit's @DisplayName.
+9. Do not write Repository Tests
+10. All DisplayNames must be written in Korean.
+### How to Write Test Code
+
+#start Example
+
+```java
+@Entity
+@NoArgsConstructor
+@Getter
+@Where(clause = "deletedAt IS NULL")
+public class Category extends AbstractEntity<String> {
+    @Id
+    private String id;
+
+    @Column(columnDefinition = "json")
+    @I18n("title")
+    private String title;
+
+    private Integer depth;
+
+    @ManyToOne
+    private Category parent;
+
+    //순회 종류가 많음
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "parent", cascade = CascadeType.ALL)
+    private List<Category> children = new LinkedList<>();
+
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+    private Set<CategoryTemplate> categoryTemplates = new HashSet<>(); // 상품정보제공고시
+
+    @Column(columnDefinition = "DATETIME(6)")
+    private ZonedDateTime deletedAt;
+
+    @Builder
+    public Category(String title, Category parent,
+        Set<ProductLegalInformationTemplate> productLegalInformationTemplates) {
+        this.id = IdPrefixes.CATEGORY.generate();
+        this.title = title;
+        this.depth = 1;
+        this.parent = parent;
+        if (parent != null) {
+            parent.addChild(this);
+            this.depth = parent.getDepth() + 1;
+        }
+        this.status = Status.SHOW;
+        this.categoryTemplates = productLegalToCategoryTemplate(productLegalInformationTemplates).collect(
+            Collectors.toSet());
+        this.deletedAt = null;
+    }
+
+    void addChild(Category category) {
+        this.children.add(category);
+    }
+
+    Stream<CategoryTemplate> productLegalToCategoryTemplate(
+        Set<ProductLegalInformationTemplate> productLegalInformationTemplates) {
+        return Optional.ofNullable(productLegalInformationTemplates)
+            .map(product -> product.stream().map(template -> template.toCategoryTemplate(this)))
+            .orElse(Stream.empty());
+    }
+
+    public void hide() {
+        this.status = Status.HIDE;
+        children.forEach(Category::hide);
+    }
+
+    public void show() {
+        if (!isRoot() && this.parent.isHidden()) {
+            throw CategoryProblem.invalidShowCategory(id, getParent().getId());
+        }
+        this.status = Status.SHOW;
+    }
+
+    public boolean isHidden() {
+        return this.status == Status.HIDE;
+    }
+
+    public boolean isRoot() {
+        return this.parent == null;
+    }
+
+    public void delete() {
+        this.status = Status.DELETED;
+        this.deletedAt = ZonedDateTime.now();
+        this.children.forEach(Category::delete);
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public enum Status {
+        SHOW("활성"), HIDE("비활성"), DELETED("삭제");
+        private final String description;
+    }
+
+}
+```
+
+Fixture
+```java
+
+public class CategoryFixture {
+    private CategoryFixture() {
+    }
+
+    public static Category createRootCategory(String title) {
+        return Category.builder().title(title).build();
+    }
+
+    public static Category createRootCategoryWithTemplate(String title,
+        Set<ProductLegalInformationTemplate> templates) {
+        return Category.builder().title(title).productLegalInformationTemplates(templates).build();
+    }
+
+    public static Category createSecondCategory(String title, String rootCategoryTitle) {
+        return Category.builder().parent(createRootCategory(rootCategoryTitle)).title(title).build();
+    }
+
+    public static Category createThirdCategory(String title, String secondTitle, String rootCategoryTitle) {
+        return Category.builder().parent(createSecondCategory(secondTitle, rootCategoryTitle)).title(title)
+            .build();
+    }
+
+    public static Category createCategory(String categoryTitles, String delimiter) {
+        String[] titles = categoryTitles.split(delimiter);
+
+        Category category = switch (titles.length) {
+            case 1 -> createRootCategory(titles[0]);
+            case 2 -> createSecondCategory(titles[1], titles[0]);
+            case 3 -> createThirdCategory(titles[2], titles[1], titles[0]);
+            default -> throw new IllegalStateException("Unexpected value: " + titles.length);
+        };
+
+        while (category.getParent() != null) {
+            category = category.getParent();
+        }
+
+        return category;
+    }
+}
+```
+
+
+Test Code
+```java
+public class CategoryTest {
+
+    @Test
+    @DisplayName("카테고리에 Parent 가 없는 생성이 요청이 오는 경우에는 Children Size가 0 이다")
+    void createCategoryWithoutParent() {
+        Category category = CategoryFixture.createCategory("스포츠", ">");
+        Assertions.assertThat(category.getChildren()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("카테고리에 Parent 가 있는 생성이 오면 Parent 의 Children Size가 1 로 바뀐다")
+    void createCategoryWithParent() {
+        Category category = CategoryFixture.createCategory("스포츠>야구", ">");
+        Assertions.assertThat(category.getChildren()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("ProductLegalInformationTemplate 을 가지고 있는 카테고리를 생성하면, CategoryTemplate 으로 저장된다")
+    void createCategoryWithTemplate() {
+        Category category = Category.builder()
+            .title("스포츠")
+            .parent(null)
+            .productLegalInformationTemplates(new HashSet<>() {{
+                add(ProductLegalInformationTemplate.builder()
+                    .name("색상")
+                    .defaultValue("검정")
+                    .priority(1)
+                    .build()
+                );
+            }})
+            .build();
+
+        assertThat(category.getCategoryTemplates()).hasSize(1);
+        for (CategoryTemplate template : category.getCategoryTemplates()) {
+            assertThat(template.getName()).isEqualTo("색상");
+            assertThat(template.getDefaultValue()).isEqualTo("검정");
+            assertThat(template.getPriority()).isEqualTo(1);
+            assertThat(template.isLegalInformation()).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("카테고리의 Display 의 변경이 될 떄")
+    class ChangeDisplay {
+        @Test
+        @DisplayName("카테고리 Hide 를 진행하면 Children 도 모두 Hide 로 변경된다")
+        void hideCategory() {
+            Category category = CategoryFixture.createCategory("스포츠>야구", ">");
+            category.hide();
+            Assertions.assertThat(category.isHidden()).isTrue();
+            Assertions.assertThat(category.getChildren().iterator().next().isHidden()).isTrue();
+        }
+
+        @Test
+        @DisplayName("카테고리의 Show 를 진행하면 상위의 카테고리가 Hidden 상태면 에러가 발생한다")
+        void showCategory() {
+            Category category = CategoryFixture.createCategory("스포츠>야구", ">");
+            category.hide();
+            Category secondCategory = category.getChildren().get(0);
+            assertThat(secondCategory.isHidden()).isTrue();
+            Assertions.assertThatThrownBy(secondCategory::show).isInstanceOf(CategoryProblem.class);
+        }
+
+        @Test
+        @DisplayName("카테고리의 Show 를 진행하면 상위의 카테고리가 Show 상태면 Show 가 진행된다")
+        void showCategoryWhenParentIsShow() {
+            Category category = CategoryFixture.createCategory("스포츠>야구", ">");
+            Category secondCategory = category.getChildren().get(0);
+            secondCategory.hide();
+            assertThat(secondCategory.isHidden()).isTrue();
+            secondCategory.show();
+
+            assertThat(secondCategory.isHidden()).isFalse();
+        }
+    }
+
+    @Test
+    @DisplayName("카테고리를 삭제하면, 하위 카테고리 모두 삭제된다")
+    void deleteCategory() {
+        Category category = CategoryFixture.createCategory("스포츠>야구>야구공", ">");
+        Category secondCategory = category.getChildren().get(0);
+        Category thirdCategory = secondCategory.getChildren().get(0);
+
+        secondCategory.delete();
+
+        assertThat(secondCategory.getStatus()).isEqualTo(Status.DELETED);
+        assertThat(thirdCategory.getStatus()).isEqualTo(Status.DELETED);
+        assertThat(secondCategory.getDeletedAt()).isNotNull();
+        assertThat(thirdCategory.getDeletedAt()).isNotNull();
+    }
+}
+```
+#end example
+
+2. In such cases, utilize Nested
+#start example
+Wrong Answer
+
+```java
+@SpringBootTest
+public class CreateStorePolicyTest {
+
+    @InjectMocks
+    private CreateStorePolicy createStorePolicy;
+
+    @Mock
+    private StorePolicyRepository storePolicyRepository;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    @DisplayName("상점 정책을 생성하는데 이미 존재하는 상점 ID로 요청이 오는 경우")
+    public void createStorePolicyWithExistingStoreId() {
+        // Given
+        CreateStorePolicyCommand command = new CreateStorePolicyCommand("store1", "free");
+
+        Mockito.when(storePolicyRepository.existsByStoreId("store1")).thenReturn(true);
+
+        // When, Then
+        assertThatThrownBy(() -> createStorePolicy.create(command))
+            .isInstanceOf(StoreProblem.class)
+            .hasMessageContaining("이미 존재하는 상점 ID 입니다.");
+    }
+
+    @Test
+    @DisplayName("상점 정책을 생성하는데 정상적인 경우")
+    public void createStorePolicy() {
+        // Given
+        CreateStorePolicyCommand command = new CreateStorePolicyCommand("store2", "free");
+        StorePolicy storePolicy = StorePolicy.builder()
+            .storeId("store2")
+            .shippingFeePolicyType("free")
+            .build();
+
+        Mockito.when(storePolicyRepository.existsByStoreId("store2")).thenReturn(false);
+        Mockito.when(storePolicyRepository.saveAndFlush(storePolicy)).thenReturn(storePolicy);
+
+        // When
+        StorePolicyInfo storePolicyInfo = createStorePolicy.create(command);
+
+        // Then
+        assertThat(storePolicyInfo.getStoreId()).isEqualTo("store2");
+        assertThat(storePolicyInfo.getShippingFeePolicyType()).isEqualTo("free");
+    }
+}
+```
+
+Correct Answer is 
+
+```java
+@ExtendWith(MockitoExtension.class)
+public class CreateStorePolicyTest {
+
+    @InjectMocks
+    private CreateStorePolicy createStorePolicy;
+
+    @Mock
+    private StorePolicyRepository storePolicyRepository;
+
+    @BeforeEach
+    public void setUp() {
+        Mockito.when(storePolicyRepository.existsByStoreId(org.mockito.ArgumentMatchers.any())).thenReturn(false);
+        Mockito.when(storePolicyRepository.existsByStoreId(org.mockito.ArgumentMatchers.eq("store1"))).thenReturn(true);
+    }
+
+    @Nested
+    @DisplayName("상점 정책을 생성할 때")
+    class WhenCreateStorePolicy {
+       @Test
+       @DisplayName("이미 존재하는 상점 ID로 요청이 오는 경우 Store Problem 에러가 발생한다")
+        void createStorePolicyWithExistingStoreId() {
+          //given
+          CreateStorePolicyCommand command = CreateStorePolicyCommand.builder()
+                            .storeId("store1")
+                            .shippingFeePolicyType("free")
+                            .build();
+
+          assertThatThrownBy(() -> createStorePolicy.create(command))
+            .isInstanceOf(StoreProblem.class)
+            .hasMessageContaining("이미 존재하는 상점 ID 입니다.");
+        }
+
+    @Test
+    @DisplayName("존재하지 않는 스토어로 요청이 오는 경우")
+    public void createStorePolicy() {
+        // Given
+         CreateStorePolicyCommand command = CreateStorePolicyCommand.builder()
+                            .storeId("store1")
+                            .shippingFeePolicyType("free")
+                            .build();
+
+        Mockito.when(storePolicyRepository.saveAndFlush(any())).thenAnswer(args -> args.get(0));
+        // When
+        StorePolicyInfo storePolicyInfo = createStorePolicy.create(command);
+
+        // Then
+        assertThat(storePolicyInfo.getStoreId()).isEqualTo("store2");
+        assertThat(storePolicyInfo.getShippingFeePolicyType()).isEqualTo("free");
+      }
+    }
+}
+```
+
+#end example

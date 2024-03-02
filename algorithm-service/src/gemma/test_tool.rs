@@ -16,7 +16,7 @@ impl TestToolGemini {
         let mut prompt = String::new();
         for mut file in files {
             let mut file_str = String::new();
-            let _ = file.read_to_string(&mut file_str);
+            let _ = file.1.read_to_string(&mut file_str);
             prompt = format!("{}\n{}",prompt,file_str);
         }
         TestToolGemini {
