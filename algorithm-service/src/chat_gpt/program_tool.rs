@@ -151,7 +151,7 @@ mod test_progamming_tool {
         let file: File = File::open("./assertj.md").unwrap();
 
         let chat_gpt: ProgrammingToolChatGPT =
-            ProgrammingToolChatGPT::new(ChatGPT::new("".to_string()), vec![&mut Box::new(file)]);
+            ProgrammingToolChatGPT::new(ChatGPT::new("".to_string()), &mut vec![Box::new(file)], "".to_string());
 
         println!("{:#?}", chat_gpt.prompt);
     }
